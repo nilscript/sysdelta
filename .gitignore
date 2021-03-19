@@ -1,5 +1,9 @@
 .vscode/
+
 GLIST
 GPATH
 GRTAGS
 GTAGS
+
+sysdelta
+sysdelta.o

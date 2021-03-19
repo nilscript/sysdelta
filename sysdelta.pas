@@ -16,11 +16,11 @@ type
         FSourceFile: String;
         FCacheFile: String;
 
-        FSourceModTimestamp: Int32;
-        FCachedModTimestamp: Int32;
+        FNowTimestamp: Int64;
+        FCachedModTimestamp: Int64;
 
-        FSource: Int32;
-        FCached: Int32;
+        FSource: Int64;
+        FCached: Int64;
     public
         constructor Init;
         procedure ReadData(src: String);
@@ -58,7 +58,7 @@ end;
 
 constructor TDataPoint.Init;
 begin
-    FSourceModTimestamp := 0;
+    FNowTimestamp := 0;
     FCachedModTimestamp := 0;
 
     FSource := 0;
@@ -68,9 +68,9 @@ end;
 procedure TDataPoint.ReadData(Src: String);
 begin
     FSourceFile := Src;
-    FCacheFile := GetEnv('XDG_RUNTIME_DIR') + '/sysdelta/' + MD5Print(MD5String(Src));
+    FCacheFile := GetEnv('XDG_RUNTIME_DIR') + '/sysdelta/' + ReplaceStr(Src, '/', '_');
     
-    FSourceModTimestamp := FileAge(FSourceFile);
+    FNowTimestamp := DateTimeToUnix(Now, false);
     FCachedModTimestamp := FileAge(FCacheFile);
 
     FSource := StrToInt(fileReadLine(FSourceFile));
@@ -96,11 +96,11 @@ begin Result := FCached - FSource; end;
 
 function TDataPoint.GetDelta: Integer;
 var
-    TimeDiff: Int32;
+    TimeDiff: Int64;
 begin
-    TimeDiff := FSourceModTimestamp - FCachedModTimestamp;
+    TimeDiff := FNowTimestamp - FCachedModTimestamp;
     if TimeDiff = 0 then TimeDiff := 1;
-    Result := (FCached - FSource) div TimeDiff;
+    Result := (FSource - FCached) div TimeDiff;
 end;
 
 procedure Die(Code: Integer; Message: string);
@@ -117,19 +117,18 @@ begin
     WriteLn('Values: %a         Plain. Write the file content directly out');
     WriteLn('        %b         Diff from cache');
     WriteLn('        %c         Plain. Returns what was cached');
-    WriteLn('        %d[:<n>]   Delta from cache. Default is to show the difference in seconds');
+    WriteLn('        %d         Delta from cache. Default is to show the difference in seconds');
     WriteLn('                       n if set can scale the result to another units of time');
     WriteLn('                       For example setting n to 60 makes the unit of time in minutes rather in seconds');
     WriteLn('                       Sampling (how often to run this program) should somewhat reflect what you set to n');
     WriteLn('                           as data will become inaccurate if sampling to often');
     WriteLn('        %i         IEC Byte rounding. Gains one prefix of [KiB, MiB, GiB, ..., YiB]');
     WriteLn('        %j         IEC Byte rounding + diff');
-    WriteLn('        %k[:<n>]   IEC Byte rounding + delta');
-    WriteLn('        %l');
-    WriteLn('        %s         Si-Byte rounding. Gains one prefix of [KB, MB, GB, ..., YB');
-    WriteLn('        %t         Si-Byte rounding + diff');
-    WriteLn('        %u[:<n>]   Si-Byte rounding + delta');
-    WriteLn('        %v');
+    WriteLn('        %k         IEC Byte rounding cached');
+    WriteLn('        %l         IEC Byte rounding + delta');
+    //WriteLn('        %s         Si-Byte rounding. Gains one prefix of [KB, MB, GB, ..., YB');
+    //WriteLn('        %t         Si-Byte rounding + diff');
+    //WriteLn('        %u         Si-Byte rounding + delta');
 end;
 
 procedure MaybeHelp(param: String);
@@ -138,6 +137,7 @@ begin
     case param of
     '-h':       help := true;
     'help':     help := true;
+    '-help':    help := true;
     '--help':   help := true;
     end;
 
@@ -151,8 +151,8 @@ end;
 (*
     Takes an format string and returns a dynamic array of strings, 
     divided by their format functionality. Strings with no format functionality
-    is placed in odd cells and strings with format functionality is placed in even 
-    cells. Remember that arrays are zero indexed.
+    is placed in even cells and strings with format functionality is placed in 
+    odd cells. Remember that arrays are zero indexed.
 
     Method will return empty strings inbetween format strings if no contextual
     strings are placed between format strings.
@@ -196,8 +196,8 @@ begin
         end
         else  
         begin                                           (* Switch state and flush buffer *)
-            result[ptr] := buf;
-            inc(ptr);
+            Result[ptr] := buf;
+            Inc(ptr);
             buf := '';
         end;
 
@@ -209,9 +209,9 @@ begin
     else if (ptr mod 2) = 1 then
         raise Exception.Create('Malformed format string. Format has no ending character')
     else
-        result[ptr] := buf;     (* Putting in leftovers from buffer *)
+        Result[ptr] := buf;     (* Putting in leftovers from buffer *)
 
-    SetLength(result, ptr + 1); (* Shrink array to actual needed capacity *)
+    SetLength(Result, ptr + 1); (* Shrink array to actual needed capacity *)
 end;
 
 (* 
@@ -260,12 +260,12 @@ begin
     end;
 
     (* Check for help option and exit *)
-    for I := 1 to ParamCount-1 do
+    for I := 1 to ParamCount do
         maybeHelp(ParamStr(I));
 
     (* Initiate array of Data objects with *)
     SetLength(DataPoints, ParamCount - 1);
-    for I := 0 to Length(DataPoints)-1 do // Skip format section
+    for I := 0 to ParamCount-2 do // Skip format section
     begin
         DataPoints[I] := TDataPoint.Init;
         DataPoints[I].ReadData(ParamStr(I+2));
@@ -274,11 +274,17 @@ begin
     FormArr := FormatSplitter(ParamStr(1));
     for I := 0 to Length(FormArr) -1 do
         if (I mod 2) = 0 then
-            Write(Format('%s', [FormArr[I]]))
+            Write(FormArr[I])
         else
         begin
+            // TODO add sourcefile indexer functionality for format arguments here
+            DataPtr := I / 2;
+
             FormArg := '%' + Copy(FormArr[I], 1, Length(FormArr[I]) -1) + 's';
             FormEnd := formArr[I][Length(FormArr[I])];
+
+            if DataPtr = Length(DataPoints) then
+            Die(1, format('Insufficent amount of sourcefiles attached. Expected %d. Was %d', [DataPtr+1, DataPtr]));
 
             DataPoint := DataPoints[DataPtr];
 
@@ -297,6 +303,7 @@ begin
                     continue;
                 end
                 else Die(1, 'Newline takes no format argument');
+            // TODO implement SI things
             //  's': WriteLn(DataPoint);
             //  't': WriteLn(DataPoint);
             //  'u': WriteLn(DataPoint);
@@ -306,9 +313,9 @@ begin
             end;
 
             Write(Format(FormArg, [DataStr]));
-            Inc(DataPtr);
         end;
 
+    // TODO Implement flag to disable caching
     (* Save in cache *)
     for I := 0 to Length(DataPoints) -1 do
         DataPoints[I].CacheData;
