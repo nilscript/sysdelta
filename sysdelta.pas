@@ -278,15 +278,18 @@ begin
         else
         begin
             // TODO add sourcefile indexer functionality for format arguments here
-            DataPtr := I / 2;
+            DataPtr := I div 2;
 
             FormArg := '%' + Copy(FormArr[I], 1, Length(FormArr[I]) -1) + 's';
             FormEnd := formArr[I][Length(FormArr[I])];
 
-            if DataPtr = Length(DataPoints) then
-            Die(1, format('Insufficent amount of sourcefiles attached. Expected %d. Was %d', [DataPtr+1, DataPtr]));
-
-            DataPoint := DataPoints[DataPtr];
+            if (FormEnd <> 'n') then
+                if DataPtr = Length(DataPoints) then
+                    Die(1, format('Insufficent amount of sourcefiles attached. Expected %d. Was %d', [DataPtr+1, DataPtr]))
+                else
+                    DataPoint := DataPoints[DataPtr]
+                end
+            end.
 
             case FormEnd of
                 'a': DataStr := IntToStr(DataPoint.GetSource);
