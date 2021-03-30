@@ -22,12 +22,12 @@ sysdelta "rx %8l tx %8l%n" /sys/class/net/wlo1/statistics/rx_bytes /sys/class/ne
 Keep in mind that you're /sys folder might differ from mine.
 
 ## Requirements:
-fpc and make.
+free pascal and make.
 
 ## Installation:
 `make install`
 
-Make sure "$HOME/.local/bin" is in your path.
+This will install sysdelta to "$HOME/.local/bin".
 
 ## About
 
