@@ -8,5 +8,5 @@ install: sysdelta
 uninstall: 
 	rm ${HOME}/.local/bin/sysdelta
 
-clear:
+clean:
 	rm sysdelta sysdelta.o
